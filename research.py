@@ -147,14 +147,16 @@ def main():
     spectrum_f, spec_f_extent = calc_spectrum(fys)
     plot_spectrum(spectrum_f, spec_f_extent, 'filtered_spectrum.png')
 
-    sm0 = pd.Series(fys).apply(np.abs)
+    loudness = pd.Series(fys).rolling(8, min_periods=1).max()
+    ampl_abs = pd.Series(fys).apply(np.abs)
 
     def draw_smooth(period):
-        sm1 = sm0.rolling(period).mean()
+        sm1 = ampl_abs.rolling(period, center=True).mean()
+        tl = time_labels(wave_file, len(sm1))
         if period > 0:
-            plt.plot(time_labels(wave_file, len(sm1)), sm1)
+            plt.plot(tl, sm1)
         else:
-            plt.plot(time_labels(wave_file, len(sm1)), sm0)
+            plt.plot(tl, ampl_abs)
         plt.gcf().set_size_inches(15, 5)
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 6)
@@ -162,13 +164,53 @@ def main():
         plt.close()
 
     draw_smooth(0)
-    # draw_smooth(3)      # 0.4 ms
     draw_smooth(16)     # 2 ms
     draw_smooth(48)     # 6 ms
     draw_smooth(72)     # 9 ms
     draw_smooth(200)    # 25 ms
+
+    def smooth72_loudness(period):
+        loudness = ampl_abs.rolling(period, min_periods=1, center=True, win_type='hamming').mean()
+
+        sm = ampl_abs.rolling(72, center=True).mean()
+        # sm_loud = loudness.rolling(72, center=True).mean()
+        norm = sm / loudness * 1000.
+
+        tl = time_labels(wave_file, len(sm))
+
+        plt.plot(tl, sm, 'b-', tl, loudness, 'r:', tl, norm, 'g:')
+        plt.gcf().set_size_inches(15, 5)
+        plt.gca().set_ylim(0, 3000)
+        plt.gca().set_xlim(0, 6)
+        plt.savefig(f'sm_loud{period}.png', dpi=100)
+        plt.close()
+
+    # smooth72_loudness(8)        # 1 ms
+    # smooth72_loudness(400)      # 50 ms
+    # smooth72_loudness(800)      # 100 ms
+    smooth72_loudness(4000)     # 500 ms
+    smooth72_loudness(8000)     # 1000 ms
+
     # draw_smooth(400)    # 50 ms
-    sm = sm0.rolling(72).mean()
+    sm = ampl_abs.rolling(72, center=True).mean()
+    # print(f'len(sm)={len(sm)}')
+    #
+    # temp = sm - sm.min()
+    # sm_ft = temp.apply(lambda v: v if v > temp.max() / 20. else np.NaN)
+    #
+    # loud05 = sm_ft.rolling(6000, center=True, win_type='triang', min_periods=3000).mean()
+    # loud1 = sm_ft.rolling(8000, center=True, win_type='triang', min_periods=4000).mean()
+    # loud2 = sm_ft.rolling(12000, center=True, win_type='triang', min_periods=6000).mean()
+    #
+    # norm = sm_ft / loud2 * 1000
+    # print(f'len(loud)={len(loud05)}')
+    #
+    # tl = time_labels(wave_file, len(sm))
+    # plt.plot(tl, sm_ft, '-', tl, loud05, 'r:', tl, loud1, 'g:', tl, loud2, 'b:', tl, norm, 'm:')
+    # plt.gcf().set_size_inches(15, 5)
+    # plt.gca().set_xlim(0, 6)
+    # plt.savefig(f'sm_amp72__loud4000.png', dpi=100)
+    # plt.close()
 
     dd1 = threshold(sm, 160)
     # todo число связных компонент "1" в зависимости от порогового значения
