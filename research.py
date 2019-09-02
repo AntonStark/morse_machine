@@ -1,9 +1,12 @@
 import os
 import numpy as np
-import pandas as pd
+try:
+    import pandas as pd
+except UserWarning:
+    pass
 from matplotlib import mlab as mlab
 from matplotlib import pyplot as plt
-from scipy.signal import butter, sosfiltfilt
+from scipy.signal import butter, sosfiltfilt, find_peaks
 from wave import open as open_wave
 
 AUDIO_DIR = './audio'
@@ -147,72 +150,139 @@ def main():
     spectrum_f, spec_f_extent = calc_spectrum(fys)
     plot_spectrum(spectrum_f, spec_f_extent, 'filtered_spectrum.png')
 
-    loudness = pd.Series(fys).rolling(8, min_periods=1).max()
-    ampl_abs = pd.Series(fys).apply(np.abs)
+    sm0 = pd.Series(fys).apply(np.abs)
 
-    def draw_smooth(period):
-        sm1 = ampl_abs.rolling(period, center=True).mean()
-        tl = time_labels(wave_file, len(sm1))
-        if period > 0:
-            plt.plot(tl, sm1)
-        else:
-            plt.plot(tl, ampl_abs)
+    def draw_smooth(period, source=sm0, filename = None):
+        if not filename:
+            filename = f'sm{period}_amplitude.png'
+        sm = source.rolling(period).mean()
+        plt.plot(time_labels(wave_file, len(sm)), sm)
         plt.gcf().set_size_inches(15, 5)
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 6)
-        plt.savefig(f'sm{period}_amplitude.png', dpi=100)
+        plt.savefig(filename, dpi=100)
         plt.close()
 
-    draw_smooth(0)
-    draw_smooth(16)     # 2 ms
-    draw_smooth(48)     # 6 ms
+    # draw_smooth(0)
+    # draw_smooth(3)      # 0.4 ms
+    # draw_smooth(16)     # 2 ms
+    # draw_smooth(48)     # 6 ms
     draw_smooth(72)     # 9 ms
-    draw_smooth(200)    # 25 ms
+    # draw_smooth(200)    # 25 ms
+    # draw_smooth(400)    # 50 ms
 
-    def smooth72_loudness(period):
-        loudness = ampl_abs.rolling(period, min_periods=1, center=True, win_type='hamming').mean()
+    # fys20 = adaptive_bandpass_filter(ys, spectrum, gap=20)
+    # sm20 = pd.Series(fys20).apply(np.abs)
+    # draw_smooth(72, sm20, 'sm72_fys20.png')  # 9 ms
+    # draw_smooth(48, sm20, 'sm48_fys20.png')  # 9 ms
+    #
+    # fys15 = adaptive_bandpass_filter(ys, spectrum, gap=15)
+    # sm15 = pd.Series(fys15).apply(np.abs)
+    # draw_smooth(72, sm15, 'sm72_fys15.png')     # 9 ms
+    # draw_smooth(48, sm15, 'sm48_fys15.png')     # 9 ms
+    #
+    # fys10 = adaptive_bandpass_filter(ys, spectrum, gap=10)
+    # sm10 = pd.Series(fys10).apply(np.abs)
+    # draw_smooth(72, sm10, 'sm72_fys10.png')  # 9 ms
+    # draw_smooth(48, sm10, 'sm48_fys10.png')  # 9 ms
 
-        sm = ampl_abs.rolling(72, center=True).mean()
-        # sm_loud = loudness.rolling(72, center=True).mean()
-        norm = sm / loudness * 1000.
+    sm = sm0.rolling(72).mean()
+    log = np.log(sm)
+    plt.plot(time_labels(wave_file, len(log)), log)
+    plt.gcf().set_size_inches(15, 5)
+    # plt.gca().set_ylim(0, 2000)
+    plt.gca().set_xlim(0, 6)
+    plt.savefig('log.png', dpi=100)
+    plt.close()
 
-        tl = time_labels(wave_file, len(sm))
-
-        plt.plot(tl, sm, 'b-', tl, loudness, 'r:', tl, norm, 'g:')
+    def draw_peaks(distance):
+        sm_not_nan = sm
+        sm_not_nan[np.isnan(sm)] = 0.
+        peaks, _ = find_peaks(sm_not_nan, distance=distance)
+        tl = time_labels(wave_file, len(sm_not_nan))
+        plt.plot(tl, sm_not_nan)
+        plt.plot(tl[peaks], sm_not_nan[peaks], 'x')
         plt.gcf().set_size_inches(15, 5)
-        plt.gca().set_ylim(0, 3000)
+        plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 6)
-        plt.savefig(f'sm_loud{period}.png', dpi=100)
+        plt.savefig(f'peaks{distance}ms.png', dpi=100)
+        plt.close()
+    draw_peaks(160)
+    draw_peaks(320)
+    draw_peaks(800)
+
+    def draw_low_high_medeians(period):
+        def lower_half_median(sample):
+            sample = sample[~np.isnan(sample)]
+            lower_values = np.sort(sample)[:int(len(sample) / 2)]
+            return np.median(lower_values)
+
+        def upper_half_median(sample):
+            sample = sample[~np.isnan(sample)]
+            upper_values = np.sort(sample)[int(len(sample) / 2):]
+            return np.median(upper_values)
+
+        # low_min = sm.rolling(period, center=True, min_periods=400).min()
+        low_med = sm.rolling(period, center=True, min_periods=400).apply(lower_half_median, raw=True)
+        high_med = sm.rolling(period, center=True, min_periods=400).apply(upper_half_median, raw=True)
+        # high_med1 = sm.rolling(int(0.8 * period), center=True, min_periods=400).apply(upper_half_median)
+        # high_med2 = sm.rolling(int(0.5 * period), center=True, min_periods=400).apply(upper_half_median)
+        # high_med3 = sm.rolling(int(1.2 * period), center=True, min_periods=400).apply(upper_half_median)
+        # high_med4 = sm.rolling(int(1.5 * period), center=True, min_periods=400).apply(upper_half_median)
+        tl = time_labels(wave_file, len(sm))
+        plt.plot(tl, sm)
+        plt.plot(tl, high_med, 'g')
+        # plt.plot(tl, high_med, label=f'{period}')
+        # plt.plot(tl, high_med1, label=f'{int(0.8 * period)}')
+        # plt.plot(tl, high_med2, label=f'{int(0.5 * period)}')
+        # plt.plot(tl, high_med3, label=f'{int(1.2 * period)}')
+        # plt.plot(tl, high_med4, label=f'{int(1.5 * period)}')
+        # plt.plot(tl, low_min, 'm')
+        plt.plot(tl, low_med, 'r')
+
+        plt.gcf().set_size_inches(30, 5)
+        # plt.gca().legend()
+        plt.gca().set_ylim(0, 2000)
+        plt.gca().set_xlim(0, 12)
+        plt.savefig(f'median{period}full_step_one.png', dpi=100)
         plt.close()
 
-    # smooth72_loudness(8)        # 1 ms
-    # smooth72_loudness(400)      # 50 ms
-    # smooth72_loudness(800)      # 100 ms
-    smooth72_loudness(4000)     # 500 ms
-    smooth72_loudness(8000)     # 1000 ms
+        norm = (sm - low_med) / high_med
+        plt.plot(tl, sm)
+        plt.plot(tl, 1000 * norm)
+        plt.gcf().set_size_inches(30, 5)
+        plt.gca().set_ylim(0, 2000)
+        plt.gca().set_xlim(0, 12)
+        plt.savefig(f'normalized{period}full_step_one.png', dpi=100)
+        plt.close()
+        return norm
 
-    # draw_smooth(400)    # 50 ms
-    sm = ampl_abs.rolling(72, center=True).mean()
-    # print(f'len(sm)={len(sm)}')
-    #
-    # temp = sm - sm.min()
-    # sm_ft = temp.apply(lambda v: v if v > temp.max() / 20. else np.NaN)
-    #
-    # loud05 = sm_ft.rolling(6000, center=True, win_type='triang', min_periods=3000).mean()
-    # loud1 = sm_ft.rolling(8000, center=True, win_type='triang', min_periods=4000).mean()
-    # loud2 = sm_ft.rolling(12000, center=True, win_type='triang', min_periods=6000).mean()
-    #
-    # norm = sm_ft / loud2 * 1000
-    # print(f'len(loud)={len(loud05)}')
-    #
-    # tl = time_labels(wave_file, len(sm))
-    # plt.plot(tl, sm_ft, '-', tl, loud05, 'r:', tl, loud1, 'g:', tl, loud2, 'b:', tl, norm, 'm:')
-    # plt.gcf().set_size_inches(15, 5)
-    # plt.gca().set_xlim(0, 6)
-    # plt.savefig(f'sm_amp72__loud4000.png', dpi=100)
-    # plt.close()
+    n1 = draw_low_high_medeians(8000)
+    # draw_low_high_medeians(16000)
+    # draw_low_high_medeians(32000)
 
-    dd1 = threshold(sm, 160)
+    def draw_max_min(period):
+        low_ = sm.rolling(period, center=True, min_periods=int(period / 10)).min()
+        high = sm.rolling(period, center=True, min_periods=int(period / 10)).max()
+        tl = time_labels(wave_file, len(sm))
+        plt.plot(tl, sm)
+        plt.plot(tl, low_, 'b:')
+        plt.plot(tl, high, 'r:')
+        plt.plot(tl, (low_ + high) / 2., 'g:')
+
+        plt.gcf().set_size_inches(30, 5)
+        # plt.gca().legend()
+        plt.gca().set_ylim(0, 2000)
+        plt.gca().set_xlim(0, 12)
+        plt.savefig(f'max_min_{period}full_step_one.png', dpi=100)
+        plt.close()
+
+    draw_max_min(4000)
+    draw_max_min(6000)
+    draw_max_min(8000)
+
+    # dd1 = threshold(sm, 160)
+    dd1 = threshold(n1, 0.5)
     # todo число связных компонент "1" в зависимости от порогового значения
     #  поскольку импульсы имеют некоторую высоту, график числа компонент от величины
     #  порогового значения будет иметь "полочку"
@@ -229,12 +299,13 @@ def main():
 
     ndf = pd.DataFrame(null_len)
     ndf[ndf[0] > 1].hist(bins=100)
-    # plt.gca().set_ylim(0, 60)
+    plt.gca().set_xlim(0, 2600)
     plt.savefig('null.png', dpi=100)
     plt.close()
 
     bdf = pd.DataFrame(beat_len)
     bdf[bdf[0] > 1].hist(bins=100)
+    plt.gca().set_xlim(0, 2600)
     # plt.gca().set_ylim(0, 10)
     plt.savefig('beat.png', dpi=100)
     plt.close()
