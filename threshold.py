@@ -8,9 +8,9 @@ from wave import open as open_wave
 
 AUDIO_DIR = './audio'
 FS = 8000
-FILENAME = 'cw050.wav'
-SECONDS = (6, 11)
-WINDOWS = True
+FILENAME = 'cw001.wav'
+SECONDS = (0, 6)
+WINDOWS = False
 
 
 def load_raw(name):
@@ -149,8 +149,19 @@ def main():
         plt.savefig('amplitude_minmax_points.png', dpi=100)
         plt.close()
 
-    plt.hist(beat_info['dur'], bins=100)
-    plt.show()
+    plt.hist(beat_info['dur'] / FS, bins=100)
+    if WINDOWS:
+        plt.show()
+    else:
+        plt.savefig('beats_hist.png', dpi=100)
+        plt.close()
+
+    plt.hist(null_info['dur'] / FS, bins=100)
+    if WINDOWS:
+        plt.show()
+    else:
+        plt.savefig('nulls_hist.png', dpi=100)
+        plt.close()
 
 
 if __name__ == '__main__':
