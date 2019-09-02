@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import mlab
 from matplotlib import pyplot as plt
+from scipy import interpolate
 from scipy.signal import butter, sosfiltfilt
 from wave import open as open_wave
 
@@ -150,6 +151,7 @@ def main():
         plt.close()
 
     plt.hist(beat_info['dur'] / FS, bins=100)
+    plt.gca().set_title('dash&dot')
     if WINDOWS:
         plt.show()
     else:
@@ -157,10 +159,44 @@ def main():
         plt.close()
 
     plt.hist(null_info['dur'] / FS, bins=100)
+    plt.gca().set_title('null')
     if WINDOWS:
         plt.show()
     else:
         plt.savefig('nulls_hist.png', dpi=100)
+        plt.close()
+
+    peak_filtered = beat_info[beat_info['dur'] / FS > 0.01]
+    peak_points_x, peak_points_y = peak_filtered['p_mid'], peak_filtered['ampl_mean']
+    peak_tck = interpolate.splrep(peak_points_x, peak_points_y)
+
+    def interp(n_point):
+        return interpolate.splev(n_point, peak_tck)
+    ip = np.vectorize(interp)
+    max_inter = ip(np.arange(0, len(tl)))
+
+    low_filtered = null_info[null_info['dur'] / FS > 0.01]
+    low_points_x, low_points_y = low_filtered['p_mid'], low_filtered['ampl_mean']
+    low_tck = interpolate.splrep(low_points_x, low_points_y)
+
+    def interp(n_point):
+        return interpolate.splev(n_point, low_tck)
+
+    il = np.vectorize(interp)
+    min_inter = il(np.arange(0, len(tl)))
+
+    plt.plot(tl, ampl_sm)
+    plt.plot(tl, max_inter, 'r')
+    plt.plot(SECONDS[0] + (peak_points_x / FS), peak_points_y, 'rx')
+    plt.plot(tl, min_inter, 'k')
+    plt.plot(SECONDS[0] + (low_points_x / FS), low_points_y, 'kx')
+    plt.plot(tl, (min_inter + max_inter) / 2, 'm')
+    plt.gcf().set_size_inches(15, 5)
+    plt.gca().set_xlim(*SECONDS)
+    if WINDOWS:
+        plt.show()
+    else:
+        plt.savefig('full_step_one.png', dpi=100)
         plt.close()
 
 

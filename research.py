@@ -244,7 +244,7 @@ def main():
         # plt.gca().legend()
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 12)
-        plt.savefig(f'median{period}.png', dpi=100)
+        plt.savefig(f'median{period}full_step_one.png', dpi=100)
         plt.close()
 
         norm = (sm - low_med) / high_med
@@ -253,7 +253,7 @@ def main():
         plt.gcf().set_size_inches(30, 5)
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 12)
-        plt.savefig(f'normalized{period}.png', dpi=100)
+        plt.savefig(f'normalized{period}full_step_one.png', dpi=100)
         plt.close()
         return norm
 
@@ -274,7 +274,7 @@ def main():
         # plt.gca().legend()
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 12)
-        plt.savefig(f'max_min_{period}.png', dpi=100)
+        plt.savefig(f'max_min_{period}full_step_one.png', dpi=100)
         plt.close()
 
     draw_max_min(4000)
