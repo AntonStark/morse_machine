@@ -2,4 +2,4 @@
 
 * mkdir venv
 * python -m venv venv
-* python research.py
+* python threshold.py
