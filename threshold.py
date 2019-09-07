@@ -11,7 +11,7 @@ AUDIO_DIR = './audio'
 FS = 8000
 FILENAME = 'cw001.wav'
 SECONDS = (0, 6)
-WINDOWS = False
+WINDOWS = True
 
 
 def load_raw(name):
@@ -89,12 +89,12 @@ def draw_time_series(*ys, filename, wave_file):
 def split_sign_series(ds):
     beats = []
     nulls = []
+    
     def push(sign, idx_list):
         if sign:
             beats.append(idx_list)
         else:
             nulls.append(idx_list)
-
     buf = []
     pr = ds[0]
     for idx, val in enumerate(ds):
@@ -109,17 +109,20 @@ def split_sign_series(ds):
     return nulls, beats
 
 
-def intervals_data(amplitude, intervals):
+def intervals_data(amplitude, intervals, inter_agg=np.mean):
     df = pd.DataFrame(index=np.arange(0, len(intervals)),
-                      columns=('p_mid', 'dur', 'ampl_mean'))
+                      columns=('p_mid', 'dur', 'ampl_extr'))
     for r, idx_list in enumerate(intervals):
-        df.loc[r] = [np.median(idx_list), len(idx_list), np.mean(amplitude[idx_list])]
+        df.loc[r] = [
+            np.median(idx_list), len(idx_list),
+            inter_agg(amplitude[idx_list])
+        ]
     return df
 
 
 def main():
     raw_values, wave_file = load_raw(FILENAME)
-    spectrum, spec_extent  = calc_spectrum(raw_values)
+    spectrum, spec_extent = calc_spectrum(raw_values)
     filtered_values = adaptive_bandpass_filter(raw_values, spectrum)
     amplitude = pd.Series(filtered_values).apply(np.abs)
     ampl_sm: pd.Series = amplitude.rolling(72, center=True).mean()
@@ -134,14 +137,15 @@ def main():
     draw_time_series(ampl_sm, min_max_threshold, filename='amplitude_minmax.png', wave_file=wave_file)
 
     discr_step_one = ampl_sm > min_max_threshold
+    # noinspection PyTypeChecker
     nulls, beats = split_sign_series(discr_step_one)
-    null_info = intervals_data(ampl_sm, nulls)
-    beat_info = intervals_data(ampl_sm, beats)
+    null_info = intervals_data(ampl_sm, nulls, np.min)
+    beat_info = intervals_data(ampl_sm, beats, np.max)
 
     tl = time_labels_interval(wave_file, len(ampl_sm))
     plt.plot(tl, ampl_sm, tl, min_max_threshold)
-    plt.plot(SECONDS[0] + (null_info['p_mid'] / FS), null_info['ampl_mean'], 'ko')
-    plt.plot(SECONDS[0] + (beat_info['p_mid'] / FS), beat_info['ampl_mean'], 'r*')
+    plt.plot(SECONDS[0] + (null_info['p_mid'] / FS), null_info['ampl_extr'], 'ko')
+    plt.plot(SECONDS[0] + (beat_info['p_mid'] / FS), beat_info['ampl_extr'], 'r*')
     plt.gcf().set_size_inches(15, 5)
     plt.gca().set_xlim(*SECONDS)
     if WINDOWS:
@@ -167,7 +171,7 @@ def main():
         plt.close()
 
     peak_filtered = beat_info[beat_info['dur'] / FS > 0.01]
-    peak_points_x, peak_points_y = peak_filtered['p_mid'], peak_filtered['ampl_mean']
+    peak_points_x, peak_points_y = peak_filtered['p_mid'], peak_filtered['ampl_extr']
     peak_tck = interpolate.splrep(peak_points_x, peak_points_y)
 
     def interp(n_point):
@@ -175,8 +179,8 @@ def main():
     ip = np.vectorize(interp)
     max_inter = ip(np.arange(0, len(tl)))
 
-    low_filtered = null_info[null_info['dur'] / FS > 0.01]
-    low_points_x, low_points_y = low_filtered['p_mid'], low_filtered['ampl_mean']
+    low_filtered = null_info[null_info['dur'] / FS > 0.1]
+    low_points_x, low_points_y = low_filtered['p_mid'], low_filtered['ampl_extr']
     low_tck = interpolate.splrep(low_points_x, low_points_y)
 
     def interp(n_point):
