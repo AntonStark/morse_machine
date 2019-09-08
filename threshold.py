@@ -5,13 +5,14 @@ from matplotlib import mlab
 from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy.signal import butter, sosfiltfilt
+from sklearn.linear_model import LinearRegression
 from wave import open as open_wave
 
 AUDIO_DIR = './audio'
 FS = 8000
 FILENAME = 'cw001.wav'
 SECONDS = (0, 6)
-WINDOWS = True
+WINDOWS = False
 
 
 def load_raw(name):
@@ -109,6 +110,30 @@ def split_sign_series(ds):
     return nulls, beats
 
 
+def sign_series(ds):
+    data = []
+
+    def push(idx_list):
+        label = 'beat' if ds[idx_list[0]] else 'null'
+        count = len(idx_list)
+        mid = idx_list[int((count - 1) / 2)]
+        data.append([mid, label, count, idx_list])
+
+    buf = []
+    pr = ds[0]
+    for idx, val in enumerate(ds):
+        if val == pr:
+            buf.append(idx)
+        else:
+            push(buf)
+            buf = [idx]
+        pr = val
+    push(buf)
+
+    df = pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
+    return df
+
+
 def intervals_data(amplitude, intervals, inter_agg=np.mean):
     df = pd.DataFrame(index=np.arange(0, len(intervals)),
                       columns=('p_mid', 'dur', 'ampl_extr'))
@@ -139,6 +164,8 @@ def main():
     discr_step_one = ampl_sm > min_max_threshold
     # noinspection PyTypeChecker
     nulls, beats = split_sign_series(discr_step_one)
+    # noinspection PyTypeChecker
+    nnb_inter = sign_series(discr_step_one)
     null_info = intervals_data(ampl_sm, nulls, np.min)
     beat_info = intervals_data(ampl_sm, beats, np.max)
 
@@ -202,6 +229,27 @@ def main():
     else:
         plt.savefig('full_step_one.png', dpi=100)
         plt.close()
+
+    # todo получать из гистограмм диапазоны длительности:
+    #  - точек и тире,
+    #  - пауз, границ и пробелов (1:3:1:3:7)
+    #  выводить результат распознавания
+    di = beat_info['dur']
+    idi = di[di > 100]
+    # beat_len_delta, desired_bin_width = idi.max() - idi.min(), 30
+    # np.histogram(idi, bins=(int(beat_len_delta / desired_bin_width)))
+    dots, dashes = idi[idi < idi.mean()], idi[idi > idi.mean()]
+    plt.plot(len(dots) * [1], dots)
+    plt.plot(len(dashes) * [3], dashes)
+    plt.gca().set_xlim(0, 3.5)
+    plt.gca().set_ylim(0, 3000)
+    plt.show()
+    reg = LinearRegression().fit(
+        np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),
+        np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
+    )
+    print(f'dot={reg.predict([[1.]])}')
+
 
 
 if __name__ == '__main__':
