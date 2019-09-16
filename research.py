@@ -7,20 +7,12 @@ except UserWarning:
 from matplotlib import mlab as mlab
 from matplotlib import pyplot as plt
 from scipy.signal import butter, sosfiltfilt, find_peaks
-from wave import open as open_wave
+
+import utils
 
 AUDIO_DIR = './audio'
 FS = 8000
 TEST1 = 'cw001.wav'
-
-
-def load_raw(name):
-    filepath = os.path.join(AUDIO_DIR, name)
-    wave_file = open_wave(filepath, 'rb')
-    nframes = wave_file.getnframes()
-    wav_frames = wave_file.readframes(nframes)
-    ys = np.frombuffer(wav_frames, dtype=np.int16)
-    return ys, wave_file
 
 
 def time_labels(wave_file, len=None):
@@ -128,7 +120,8 @@ def series_length(ds):
 
 
 def main():
-    ys, wave_file = load_raw(TEST1)
+    filepath = os.path.join(AUDIO_DIR, TEST1)
+    ys, wave_file = utils.process.load_raw(filepath)
     # print(ys, len(ys))
     # wave_file.close()
 

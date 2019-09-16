@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from scipy import interpolate
 from scipy.signal import butter, sosfiltfilt
 from sklearn.linear_model import LinearRegression
-from wave import open as open_wave
 
+import utils
 from encode import CODE
 
 AUDIO_DIR = './audio'
@@ -15,18 +15,6 @@ FS = 8000
 FILENAME = 'cw001.wav'
 SECONDS = (0, 6)
 WINDOWS = True
-
-
-def load_raw(name):
-    filepath = os.path.join(AUDIO_DIR, name)
-    wave_file = open_wave(filepath, 'rb')
-    nframes, framerate = wave_file.getnframes(), wave_file.getframerate()
-    start, end = (2 * s * framerate for s in SECONDS)       # "2" because of frame size
-    if end > 2 * nframes:
-        raise IndexError(f'file {FILENAME} duration: {nframes / framerate}s., interval=({SECONDS[0]}, {SECONDS[1]}) given')
-    wav_frames = wave_file.readframes(nframes)[int(start):int(end)]
-    ys = np.frombuffer(wav_frames, dtype=np.int16)
-    return ys, wave_file
 
 
 def time_labels(wave_file, points=None):
@@ -194,7 +182,8 @@ def predict(idf, dot_len, factor=0.3):
 
 
 def main():
-    raw_values, wave_file = load_raw(FILENAME)
+    filepath = os.path.join(AUDIO_DIR, FILENAME)
+    raw_values, wave_file = utils.process.load_raw(filepath, SECONDS)
     spectrum, spec_extent = calc_spectrum(raw_values)
     filtered_values = adaptive_bandpass_filter(raw_values, spectrum)
     amplitude = pd.Series(filtered_values).apply(np.abs)
@@ -296,6 +285,7 @@ def main():
     # print(f'dot={dot_len}')
 
     result = predict(nnb_inter, dot_len)
+    print(result)
 
 
 if __name__ == '__main__':
