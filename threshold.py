@@ -8,11 +8,13 @@ from scipy.signal import butter, sosfiltfilt
 from sklearn.linear_model import LinearRegression
 from wave import open as open_wave
 
+from encode import CODE
+
 AUDIO_DIR = './audio'
 FS = 8000
 FILENAME = 'cw001.wav'
 SECONDS = (0, 6)
-WINDOWS = False
+WINDOWS = True
 
 
 def load_raw(name):
@@ -145,6 +147,52 @@ def intervals_data(amplitude, intervals, inter_agg=np.mean):
     return df
 
 
+def morse2text(morse):
+    """
+    :param morse: list of str which is either ' ' or consists of '.' and '_"
+    :return: decoded string
+    """
+    mapping = {morse: ch for ch, morse in CODE}
+    decoded = [mapping[m] if m in mapping else '#'
+               for m in morse]
+    return ''.join(decoded)
+
+
+def predict(idf, dot_len, factor=0.3):
+    """
+    :param idf: pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
+    :param dot_len: len in points
+    :param factor:
+    :return:
+    """
+    def classify(len, label, dot_len, factor):
+        dot_len_min = (1 - factor) * dot_len
+        dot_len_max = (1 + factor) * dot_len
+        if label == 'beat':
+            if dot_len_min <= len <= dot_len_max:
+                return '.'
+            elif 3 * dot_len_min <= len <= 3 * dot_len_max:
+                return '_'
+            else:
+                return None
+        elif label == 'null':
+            if dot_len_min <= len <= dot_len_max:
+                return ''
+            elif 3 * dot_len_min <= len <= 3 * dot_len_max:
+                return '|'
+            elif 7 * dot_len_min <= len:
+                return ' '          # silence during 7 dots AND MORE
+            else:
+                return None
+        else:
+            return None
+    raw_result = [classify(count, label, dot_len, factor) for _, label, count in idf[['label', 'count']].itertuples()]
+    result = [r for r in raw_result if r is not None and r != '']
+    morse_seq = ''.join(result).replace(' ', '| |').split('|')
+    result = morse2text(morse_seq).upper()
+    return result
+
+
 def main():
     raw_values, wave_file = load_raw(FILENAME)
     spectrum, spec_extent = calc_spectrum(raw_values)
@@ -230,10 +278,6 @@ def main():
         plt.savefig('full_step_one.png', dpi=100)
         plt.close()
 
-    # todo получать из гистограмм диапазоны длительности:
-    #  - точек и тире,
-    #  - пауз, границ и пробелов (1:3:1:3:7)
-    #  выводить результат распознавания
     di = beat_info['dur']
     idi = di[di > 100]
     # beat_len_delta, desired_bin_width = idi.max() - idi.min(), 30
@@ -248,8 +292,10 @@ def main():
         np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),
         np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
     )
-    print(f'dot={reg.predict([[1.]])}')
+    dot_len = reg.predict([[1.]])[0]
+    # print(f'dot={dot_len}')
 
+    result = predict(nnb_inter, dot_len)
 
 
 if __name__ == '__main__':

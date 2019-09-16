@@ -49,8 +49,7 @@ def main():
 
     rf = ss[~is_empty].copy()
     rf['MORSE'] = rf['PREDICTION'].apply(to_morse)
-    rf.to_csv(CSV_TO_WRITE, encoding='utf-8', index=False)
-    debug = []
+    rf.rename(columns={'PREDICTION': 'LABEL'}).to_csv(CSV_TO_WRITE, encoding='utf-8', index=False)
 
 
 if __name__ == '__main__':
