@@ -9,6 +9,8 @@ from encode import CODE
 
 AUDIO_DIR = './audio'
 PLOTS_DIR = './plots'
+CSV_DIR = './csv_tables'
+
 FILENAME = 'cw001.wav'
 
 FS = 8000
@@ -190,7 +192,8 @@ def main():
     if INTERACTIVE:
         plt.show()
     else:
-        plt.savefig('full_step_one.png', dpi=100)
+        fn = utils.plot_filepath(PLOTS_DIR, 'full_step_one.png')
+        plt.savefig(fn, dpi=100)
         plt.close()
 
     di = beat_info['dur']
@@ -205,7 +208,8 @@ def main():
     if INTERACTIVE:
         plt.show()
     else:
-        plt.savefig('durations_regr.png', dpi=100)
+        fn = utils.plot_filepath(PLOTS_DIR, 'durations_regr.png')
+        plt.savefig(fn, dpi=100)
         plt.close()
     reg = LinearRegression().fit(
         np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),

@@ -7,6 +7,7 @@ import utils
 
 AUDIO_DIR = './audio'
 PLOTS_DIR = './plots'
+
 TEST1 = 'cw001.wav'
 
 FS = 8000

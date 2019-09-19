@@ -1,9 +1,12 @@
 # import functools
+import os
 # import numpy as np
 import pandas as pd
 
-CSV_TO_READ = './SampleSubmission.csv'
-CSV_TO_WRITE = './MorseLabels.csv'
+CSV_DIR = './csv_tables'
+CSV_TO_READ = os.path.join(CSV_DIR, 'SampleSubmission.csv')
+CSV_TO_WRITE = os.path.join(CSV_DIR, 'MorseLabels.csv')
+
 P = 'PREDICTION'
 
 CODE = [
