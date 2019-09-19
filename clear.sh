@@ -1,1 +1,2 @@
-rm *.png
+#!/usr/bin/env bash
+rm *.png plots/*.png

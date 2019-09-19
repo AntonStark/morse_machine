@@ -1,34 +1,15 @@
-import os
 import numpy as np
-try:
-    import pandas as pd
-except UserWarning:
-    pass
-from matplotlib import mlab as mlab
+import pandas as pd
 from matplotlib import pyplot as plt
-from scipy.signal import butter, sosfiltfilt, find_peaks
+from scipy.signal import find_peaks
 
 import utils
 
 AUDIO_DIR = './audio'
-FS = 8000
+PLOTS_DIR = './plots'
 TEST1 = 'cw001.wav'
 
-
-def time_labels(wave_file, len=None):
-    if len is None:
-        len = wave_file.getnframes()
-    ts = np.linspace(0, wave_file.getnframes() / wave_file.getframerate(), num=len)
-    return ts
-
-
-def draw_amplitude(ts, ys, filename):
-    plt.plot(ts, ys)
-    plt.gcf().set_size_inches(15, 5)
-    plt.gca().set_ylim(-3500, 3500)
-    plt.gca().set_xlim(0, 6)
-    plt.savefig(filename, dpi=100)
-    plt.close()
+FS = 8000
 
 
 def draw_ampl_dist(ys, name, **kwargs):
@@ -46,17 +27,6 @@ def draw_ampl_log_dist(ys, name, **kwargs):
     plt.close()
 
 
-def calc_spectrum(data):
-    nfft, noverlap, fs = 512, 384, FS
-
-    spectrum, freqs, t = mlab.specgram(data, Fs=fs, NFFT=nfft,
-                                       noverlap=noverlap, detrend='none')
-    pad_xextent = (nfft - noverlap) / fs / 2
-    xmin, xmax = np.min(t) - pad_xextent, np.max(t) + pad_xextent
-    spec_extent = xmin, xmax, freqs[0], freqs[-1]
-    return spectrum, spec_extent
-
-
 def plot_spectrum(spectrum, extent, filename):
     z = 10. * np.log10(spectrum)
     z = np.flipud(z)
@@ -64,32 +34,6 @@ def plot_spectrum(spectrum, extent, filename):
     plt.gcf().set_size_inches(15, 5)
     plt.savefig(filename, dpi=100)
     plt.close()
-
-
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    # b, a = butter(order, [low, high], btype='band')
-    # return b, a
-    sos = butter(order, [low, high], btype='band', output='sos')
-    return sos
-
-
-def butter_bandpass_filter(input, lowcut, highcut, fs, order=5):
-    # b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    # output = lfilter(b, a, input)
-    sos = butter_bandpass(lowcut, highcut, fs, order=order)
-    output = sosfiltfilt(sos, input)
-    return output
-
-
-def adaptive_bandpass_filter(input, spectrum, gap=25, order=3):
-    freq_en_dist = spectrum.sum(axis=1)
-    main_freq = freq_en_dist.argmax() / len(freq_en_dist) * FS / 2
-    sos = butter_bandpass(main_freq - gap, main_freq + gap, FS, order=order)
-    output = sosfiltfilt(sos, input)
-    return output
 
 
 def threshold(data, value):
@@ -120,27 +64,24 @@ def series_length(ds):
 
 
 def main():
-    filepath = os.path.join(AUDIO_DIR, TEST1)
-    ys, wave_file = utils.process.load_raw(filepath)
-    # print(ys, len(ys))
-    # wave_file.close()
+    ys, wave_file = utils.process.load_raw(utils.audio_filepath(AUDIO_DIR, TEST1), seconds=(0, 6))
 
-    ts = time_labels(wave_file)
-    draw_amplitude(ts, ys, 'amplitude.png')
+    utils.plot.draw_time_series(ys, wave_file=wave_file, seconds=(0, 6), interactive=False, save_to='amplitude.png')
 
     # draw_ampl_dist(ys, 'dist.png')
     draw_ampl_dist(ys, 'dist.png', bins=100)
     draw_ampl_log_dist(ys, 'log_dist.png', bins=100)
 
-    spectrum, spec_extent  = calc_spectrum(ys)
+    spectrum, spec_extent  = utils.process.calc_spectrum(ys, FS)
     plot_spectrum(spectrum, spec_extent, 'raw_spectrum.png')
 
-    fys = adaptive_bandpass_filter(ys, spectrum)
-    fts = time_labels(wave_file, len(fys))
-    draw_amplitude(fts, fys, 'filtered_amplitude.png')
+    fys = utils.process.adaptive_bandpass_filter(ys, spectrum, FS)
+
+    utils.plot.draw_time_series(fys, wave_file=wave_file, seconds=(0, 6), interactive=False,
+                                save_to='filtered_amplitude.png')
     draw_ampl_dist(fys, 'dist_filtered.png', bins=100)
 
-    spectrum_f, spec_f_extent = calc_spectrum(fys)
+    spectrum_f, spec_f_extent = utils.process.calc_spectrum(fys, FS)
     plot_spectrum(spectrum_f, spec_f_extent, 'filtered_spectrum.png')
 
     sm0 = pd.Series(fys).apply(np.abs)
@@ -149,7 +90,7 @@ def main():
         if not filename:
             filename = f'sm{period}_amplitude.png'
         sm = source.rolling(period).mean()
-        plt.plot(time_labels(wave_file, len(sm)), sm)
+        plt.plot(utils.process.time_labels(wave_file, len(sm)), sm)
         plt.gcf().set_size_inches(15, 5)
         plt.gca().set_ylim(0, 2000)
         plt.gca().set_xlim(0, 6)
@@ -181,7 +122,7 @@ def main():
 
     sm = sm0.rolling(72).mean()
     log = np.log(sm)
-    plt.plot(time_labels(wave_file, len(log)), log)
+    plt.plot(utils.process.time_labels(wave_file, len(log)), log)
     plt.gcf().set_size_inches(15, 5)
     # plt.gca().set_ylim(0, 2000)
     plt.gca().set_xlim(0, 6)
@@ -192,7 +133,7 @@ def main():
         sm_not_nan = sm
         sm_not_nan[np.isnan(sm)] = 0.
         peaks, _ = find_peaks(sm_not_nan, distance=distance)
-        tl = time_labels(wave_file, len(sm_not_nan))
+        tl = utils.process.time_labels(wave_file, len(sm_not_nan))
         plt.plot(tl, sm_not_nan)
         plt.plot(tl[peaks], sm_not_nan[peaks], 'x')
         plt.gcf().set_size_inches(15, 5)
@@ -222,7 +163,7 @@ def main():
         # high_med2 = sm.rolling(int(0.5 * period), center=True, min_periods=400).apply(upper_half_median)
         # high_med3 = sm.rolling(int(1.2 * period), center=True, min_periods=400).apply(upper_half_median)
         # high_med4 = sm.rolling(int(1.5 * period), center=True, min_periods=400).apply(upper_half_median)
-        tl = time_labels(wave_file, len(sm))
+        tl = utils.process.time_labels(wave_file, len(sm))
         plt.plot(tl, sm)
         plt.plot(tl, high_med, 'g')
         # plt.plot(tl, high_med, label=f'{period}')
@@ -257,7 +198,7 @@ def main():
     def draw_max_min(period):
         low_ = sm.rolling(period, center=True, min_periods=int(period / 10)).min()
         high = sm.rolling(period, center=True, min_periods=int(period / 10)).max()
-        tl = time_labels(wave_file, len(sm))
+        tl = utils.process.time_labels(wave_file, len(sm))
         plt.plot(tl, sm)
         plt.plot(tl, low_, 'b:')
         plt.plot(tl, high, 'r:')
@@ -280,7 +221,7 @@ def main():
     #  поскольку импульсы имеют некоторую высоту, график числа компонент от величины
     #  порогового значения будет иметь "полочку"
     # todo также можно смотреть на распределнеие длительностей "0" при разных пороговых
-    plt.plot(time_labels(wave_file, len(dd1)), dd1, fillstyle='none')
+    plt.plot(utils.process.time_labels(wave_file, len(dd1)), dd1, fillstyle='none')
     plt.gca().set_xlim(0, 6)
     plt.gcf().set_size_inches(15, 5)
     plt.savefig('discrete.png', dpi=100)
@@ -290,25 +231,10 @@ def main():
     print(f'nulls: count={len(null_len)}, min_len={np.min(null_len)}, max_len={np.max(null_len)}')
     print(f'beats: count={len(beat_len)}, min_len={np.min(beat_len)}, max_len={np.max(beat_len)}')
 
-    ndf = pd.DataFrame(null_len)
-    ndf[ndf[0] > 1].hist(bins=100)
-    plt.gca().set_xlim(0, 2600)
-    plt.savefig('null.png', dpi=100)
-    plt.close()
-
-    bdf = pd.DataFrame(beat_len)
-    bdf[bdf[0] > 1].hist(bins=100)
-    plt.gca().set_xlim(0, 2600)
-    # plt.gca().set_ylim(0, 10)
-    plt.savefig('beat.png', dpi=100)
-    plt.close()
-    # plt.subplot(2, 1, 1)
-    # hist, bins = np.histogram(null_len, bins=100)
-    # plt.plot(bins[:-1], hist)
-    # plt.subplot(2, 1, 2)
-    # hist, bins = np.histogram(beat_len, bins=100)
-    # plt.plot(bins[:-1], hist)
-    # plt.gcf().savefig('null_beat.png')
+    utils.plot.draw_hist(beat_len, FS, 'dash&dot',
+                         False, save_to=utils.plot_filepath(PLOTS_DIR, 'beats_hist.png'))
+    utils.plot.draw_hist(null_len, FS, 'null',
+                         False, save_to=utils.plot_filepath(PLOTS_DIR, 'nulls_hist.png'))
     debug = []
 
 
