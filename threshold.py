@@ -97,8 +97,15 @@ def main():
     # np.histogram(idi, bins=(int(beat_len_delta / desired_bin_width)))
     dots, dashes = idi[idi < idi.mean()], idi[idi > idi.mean()]
 
+    reg = LinearRegression().fit(
+        np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),
+        np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
+    )
+    r1_dur, dot_len, r2_dur = reg.predict([[0.], [1.], [3.5]])
+
     plt.plot(len(dots) * [1], dots)
     plt.plot(len(dashes) * [3], dashes)
+    plt.plot([0, 3.5], [r1_dur, r2_dur])
     plt.gca().set_xlim(0, 3.5)
     plt.gca().set_ylim(0, 3000)
     if INTERACTIVE:
@@ -107,12 +114,6 @@ def main():
         fn = utils.plot_filepath(PLOTS_DIR, 'durations_regr.png')
         plt.savefig(fn, dpi=100)
         plt.close()
-
-    reg = LinearRegression().fit(
-        np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),
-        np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
-    )
-    dot_len = reg.predict([[1.]])[0]
 
     # noinspection PyTypeChecker
     nnb_inter = utils.process.sign_series(discr_step_one)
