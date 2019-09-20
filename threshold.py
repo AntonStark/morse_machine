@@ -18,110 +18,6 @@ SECONDS = (0, 6)
 INTERACTIVE = False
 
 
-def split_sign_series(ds):
-    beats = []
-    nulls = []
-    
-    def push(sign, idx_list):
-        if sign:
-            beats.append(idx_list)
-        else:
-            nulls.append(idx_list)
-    buf = []
-    pr = ds[0]
-    for idx, val in enumerate(ds):
-        if val == pr:
-            buf.append(idx)
-        else:
-            push(pr, buf)
-            buf = [idx]
-
-        pr = val
-    push(pr, buf)
-    return nulls, beats
-
-
-def sign_series(ds):
-    data = []
-
-    def push(idx_list):
-        label = 'beat' if ds[idx_list[0]] else 'null'
-        count = len(idx_list)
-        mid = idx_list[int((count - 1) / 2)]
-        data.append([mid, label, count, idx_list])
-
-    buf = []
-    pr = ds[0]
-    for idx, val in enumerate(ds):
-        if val == pr:
-            buf.append(idx)
-        else:
-            push(buf)
-            buf = [idx]
-        pr = val
-    push(buf)
-
-    df = pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
-    return df
-
-
-def intervals_data(amplitude, intervals, inter_agg=np.mean):
-    df = pd.DataFrame(index=np.arange(0, len(intervals)),
-                      columns=('p_mid', 'dur', 'ampl_extr'))
-    for r, idx_list in enumerate(intervals):
-        df.loc[r] = [
-            np.median(idx_list), len(idx_list),
-            inter_agg(amplitude[idx_list])
-        ]
-    return df
-
-
-def morse2text(morse):
-    """
-    :param morse: list of str which is either ' ' or consists of '.' and '_"
-    :return: decoded string
-    """
-    mapping = {morse: ch for ch, morse in CODE}
-    decoded = [mapping[m] if m in mapping else '#'
-               for m in morse]
-    return ''.join(decoded)
-
-
-def predict(idf, dot_len, factor=0.3):
-    """
-    :param idf: pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
-    :param dot_len: len in points
-    :param factor:
-    :return:
-    """
-    def classify(n_points, label):
-        dot_len_min = (1 - factor) * dot_len
-        dot_len_max = (1 + factor) * dot_len
-        if label == 'beat':
-            if dot_len_min <= n_points <= dot_len_max:
-                return '.'
-            elif 3 * dot_len_min <= n_points <= 3 * dot_len_max:
-                return '_'
-            else:
-                return None
-        elif label == 'null':
-            if dot_len_min <= n_points <= dot_len_max:
-                return ''
-            elif 3 * dot_len_min <= n_points <= 3 * dot_len_max:
-                return '|'
-            elif 7 * dot_len_min <= n_points:
-                return ' '          # silence during 7 dots AND MORE
-            else:
-                return None
-        else:
-            return None
-    raw_result = [classify(count, label) for _, label, count in idf[['label', 'count']].itertuples()]
-    result = [r for r in raw_result if r is not None and r != '']
-    morse_seq = ''.join(result).replace(' ', '| |').split('|')
-    result = morse2text(morse_seq).upper()
-    return result
-
-
 def main():
     # LOAD, FILTER, GET SMOOTH
     raw_values, wave_file = utils.process.load_raw(utils.audio_filepath(AUDIO_DIR, FILENAME), SECONDS)
@@ -145,11 +41,9 @@ def main():
     # BEATS DURATION
     discr_step_one = ampl_sm > min_max_threshold
     # noinspection PyTypeChecker
-    nulls, beats = split_sign_series(discr_step_one)
-    # noinspection PyTypeChecker
-    nnb_inter = sign_series(discr_step_one)
-    null_info = intervals_data(ampl_sm, nulls, np.min)
-    beat_info = intervals_data(ampl_sm, beats, np.max)
+    nulls, beats = utils.process.split_sign_series(discr_step_one)
+    null_info = utils.process.intervals_data(ampl_sm, nulls, np.min)
+    beat_info = utils.process.intervals_data(ampl_sm, beats, np.max)
 
     utils.plot.draw_time_series_with_points(ampl_sm, min_max_threshold, beat_info=beat_info, null_info=null_info,
                                             wave_file=wave_file, fs=FS, seconds=SECONDS,
@@ -201,6 +95,7 @@ def main():
     # beat_len_delta, desired_bin_width = idi.max() - idi.min(), 30
     # np.histogram(idi, bins=(int(beat_len_delta / desired_bin_width)))
     dots, dashes = idi[idi < idi.mean()], idi[idi > idi.mean()]
+
     plt.plot(len(dots) * [1], dots)
     plt.plot(len(dashes) * [3], dashes)
     plt.gca().set_xlim(0, 3.5)
@@ -211,13 +106,16 @@ def main():
         fn = utils.plot_filepath(PLOTS_DIR, 'durations_regr.png')
         plt.savefig(fn, dpi=100)
         plt.close()
+
     reg = LinearRegression().fit(
         np.array(len(dots) * [1] + len(dashes) * [3]).reshape(-1, 1),
         np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
     )
     dot_len = reg.predict([[1.]])[0]
 
-    result = predict(nnb_inter, dot_len)
+    # noinspection PyTypeChecker
+    nnb_inter = utils.process.sign_series(discr_step_one)
+    result = utils.process.predict(nnb_inter, dot_len)
     print(result)
 
 

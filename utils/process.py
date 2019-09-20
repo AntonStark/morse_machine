@@ -1,7 +1,23 @@
 import numpy as np
+import pandas as pd
 import wave
 from matplotlib import mlab
 from scipy.signal import butter, sosfiltfilt
+
+CODE = [
+    ('a', '._'), ('b', '_...'), ('c', '_._.'), ('d', '._.'), ('e', '.'), ('f', '.._.'), ('g', '__.'), ('h', '....'),
+    ('i', '..'), ('j', '.___'), ('k', '_._'), ('l', '._..'), ('m', '__'), ('n', '_.'), ('o', '___'), ('p', '.__.'),
+    ('q', '__._'), ('r', '._.'), ('s', '...'), ('t', '_'), ('u', '.._'), ('v', '..._'), ('w', '.__'), ('x', '_.._'),
+    ('y', '_.__'), ('z', '__..'), (' ', ' '),
+    ('0', '_____'), ('1', '.____'), ('2', '..___'), ('3', '...__'), ('4', '...._'),
+    ('5', '.....'), ('6', '_....'), ('7', '__...'), ('8', '___..'), ('9', '____.'),
+    ('~', '._._'), ('<AS>', '._...'), ('<AR>', '._._.'), ('<SK>', '..._._'),
+    ('<KN>', '_.__.'), ('<INT>', '.._._'), ('<HM>', '....__'), ('<VE>', '..._.'),
+    ('\\', '._.._.'), ('\'', '.____.'), ('$', '..._.._'), ('(', '_.__.'),
+    (')', '_.__._'), (',', '__..__'), ('-', '_...._'), ('.', '._._._'),
+    ('/', '_.._.'), (':', '___...'), (';', '_._._.'), ('?', '..__..'),
+    ('_', '..__._'), ('@', '.__._.'), ('!', '_._.__')
+]
 
 
 #
@@ -86,3 +102,116 @@ def adaptive_bandpass_filter(input_signal, spectrum, fs, gap=25, order=3):
     sos = butter_bandpass(main_freq - gap, main_freq + gap, fs, order=order)
     output = sosfiltfilt(sos, input_signal)
     return output
+
+
+#
+# DOT AND DASH DURATIONS
+#
+
+def split_sign_series(ds):
+    beats = []
+    nulls = []
+
+    def push(sign, idx_list):
+        if sign:
+            beats.append(idx_list)
+        else:
+            nulls.append(idx_list)
+
+    buf = []
+    pr = ds[0]
+    for idx, val in enumerate(ds):
+        if val == pr:
+            buf.append(idx)
+        else:
+            push(pr, buf)
+            buf = [idx]
+
+        pr = val
+    push(pr, buf)
+    return nulls, beats
+
+
+def intervals_data(amplitude, intervals, inter_agg=np.mean):
+    df = pd.DataFrame(index=np.arange(0, len(intervals)),
+                      columns=('p_mid', 'dur', 'ampl_extr'))
+    for r, idx_list in enumerate(intervals):
+        df.loc[r] = [
+            np.median(idx_list), len(idx_list),
+            inter_agg(amplitude[idx_list])
+        ]
+    return df
+
+
+def sign_series(ds):
+    data = []
+
+    def push(idx_list):
+        label = 'beat' if ds[idx_list[0]] else 'null'
+        count = len(idx_list)
+        mid = idx_list[int((count - 1) / 2)]
+        data.append([mid, label, count, idx_list])
+
+    buf = []
+    pr = ds[0]
+    for idx, val in enumerate(ds):
+        if val == pr:
+            buf.append(idx)
+        else:
+            push(buf)
+            buf = [idx]
+        pr = val
+    push(buf)
+
+    df = pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
+    return df
+
+
+#
+# DECODE
+#
+
+def morse2text(morse):
+    """
+    :param morse: list of str which is either ' ' or consists of '.' and '_"
+    :return: decoded string
+    """
+    mapping = {morse: ch for ch, morse in CODE}
+    decoded = [mapping[m] if m in mapping else '#'
+               for m in morse]
+    return ''.join(decoded)
+
+
+def predict(idf, dot_len, factor=0.3):
+    """
+    :param idf: pd.DataFrame(data, columns=('idx_mid', 'label', 'count', 'indices'))
+    :param dot_len: len in points
+    :param factor:
+    :return:
+    """
+    def classify(n_points, label):
+        dot_len_min = (1 - factor) * dot_len
+        dot_len_max = (1 + factor) * dot_len
+        if label == 'beat':
+            if dot_len_min <= n_points <= dot_len_max:
+                return '.'
+            elif 3 * dot_len_min <= n_points <= 3 * dot_len_max:
+                return '_'
+            else:
+                return None
+        elif label == 'null':
+            if dot_len_min <= n_points <= dot_len_max:
+                return ''
+            elif 3 * dot_len_min <= n_points <= 3 * dot_len_max:
+                return '|'
+            elif 7 * dot_len_min <= n_points:
+                return ' '          # silence during 7 dots AND MORE
+            else:
+                return None
+        else:
+            return None
+    raw_result = [classify(count, label) for _, label, count in idf[['label', 'count']].itertuples()]
+    result = [r for r in raw_result if r is not None and r != '']
+    morse_seq = ''.join(result).replace(' ', '| |').split('|')
+    result = morse2text(morse_seq).upper()
+    return result
