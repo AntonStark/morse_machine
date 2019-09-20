@@ -60,6 +60,7 @@ def main():
     peak_tck = interpolate.splrep(peak_points_x, peak_points_y)
 
     tl = utils.process.time_labels_interval(wave_file, SECONDS, len(ampl_sm))
+
     def interp(n_point):
         return interpolate.splev(n_point, peak_tck)
     ip = np.vectorize(interp)

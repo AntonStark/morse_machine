@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from scipy import interpolate
 from sklearn.linear_model import LinearRegression
 
 import utils
@@ -9,11 +10,11 @@ AUDIO_DIR = './audio'
 CSV_DIR = './csv_tables'
 
 LABELS_CSV = os.path.join(CSV_DIR, 'MorseLabels.csv')
-PREDICTIONS_CSV = os.path.join(CSV_DIR, 'Predictions0.csv')
+PREDICTIONS_CSV = os.path.join(CSV_DIR, 'Predictions1.csv')
 
 
 def make_predictions(file_numbers):
-    # file_numbers = [1]      # debug only
+    # file_numbers = [52]      # debug only
     predictions = {}
     for i, num in enumerate(file_numbers):
         # load
@@ -40,6 +41,29 @@ def make_predictions(file_numbers):
         null_info = utils.process.intervals_data(signal, nulls, np.min)
         beat_info = utils.process.intervals_data(signal, beats, np.max)
 
+        # build threshold1
+        peak_filtered = beat_info[beat_info['dur'] / fs > 0.01]
+        low_filtered = null_info[null_info['dur'] / fs > 0.1]
+
+        peak_points_x, peak_points_y = peak_filtered['p_mid'], peak_filtered['ampl_extr']
+        peak_tck = interpolate.splrep(peak_points_x, peak_points_y)
+        low_points_x, low_points_y = low_filtered['p_mid'], low_filtered['ampl_extr']
+        low_tck = interpolate.splrep(low_points_x, low_points_y)
+
+        def interp_peaks(n_point):
+            return interpolate.splev(n_point, peak_tck)
+        ip = np.vectorize(interp_peaks)
+
+        def interp_nulls(n_point):
+            return interpolate.splev(n_point, low_tck)
+        il = np.vectorize(interp_nulls)
+
+        tl = utils.process.time_labels_interval(wave_file, None, len(signal))
+        max_inter = ip(np.arange(0, len(tl)))
+        min_inter = il(np.arange(0, len(tl)))
+        threshold1: pd.Series = (max_inter + min_inter) / 2
+        discrete1 = signal > threshold1
+
         # classify intervals and decode morse
         di = beat_info['dur']
         idi = di[di > 100]
@@ -49,7 +73,7 @@ def make_predictions(file_numbers):
             np.concatenate([np.array(dots).astype(np.int), np.array(dashes).astype(np.int)])
         )
         dot_len = reg.predict([[1.]])[0]
-        nnb_inter = utils.process.sign_series(discrete0)
+        nnb_inter = utils.process.sign_series(discrete1)
         result = utils.process.predict(nnb_inter, dot_len)
         predictions[num] = result
         print(f'[{i + 1}/{len(file_numbers)}] {name} | {result}')
