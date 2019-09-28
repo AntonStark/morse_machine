@@ -26,17 +26,22 @@ CODE = [
 
 def load_raw(filepath, seconds=None):
     wave_file = wave.open(filepath, 'rb')
-    nframes, framerate = wave_file.getnframes(), wave_file.getframerate()
+    nframes, framerate, sampwidth = wave_file.getnframes(), wave_file.getframerate(), wave_file.getsampwidth()
     if seconds:
-        start, end = (2 * s * framerate for s in seconds)  # "2" because of frame size
-        if end > 2 * nframes:
+        start, end = (s * sampwidth * framerate for s in seconds)  # "2" because of frame size
+        if end > sampwidth * nframes:
             raise IndexError(
                 f'file {filepath} duration: {nframes / framerate}s., interval=({seconds[0]}, {seconds[1]}) given')
         wav_frames = wave_file.readframes(nframes)[int(start):int(end)]
     else:
         wav_frames = wave_file.readframes(nframes)
     wave_file.close()
-    ys = np.frombuffer(wav_frames, dtype=np.int16)
+    if sampwidth == 2:
+        ys = np.frombuffer(wav_frames, dtype=np.int16)
+    elif sampwidth == 4:
+        ys = np.frombuffer(wav_frames, dtype=np.int32)
+    else:
+        raise ValueError(f'unexpected wav sampwidth={sampwidth}')
     return ys, wave_file
 
 

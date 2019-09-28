@@ -10,7 +10,7 @@ AUDIO_DIR = './audio'
 CSV_DIR = './csv_tables'
 
 LABELS_CSV = os.path.join(CSV_DIR, 'MorseLabels.csv')
-PREDICTIONS_CSV = os.path.join(CSV_DIR, 'Predictions1.csv')
+PREDICTIONS_CSV = os.path.join(CSV_DIR, 'Predictions1_1.csv')
 
 
 def make_predictions(file_numbers):
