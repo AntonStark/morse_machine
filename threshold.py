@@ -81,7 +81,9 @@ def main():
     plt.plot(SECONDS[0] + (peak_points_x / FS), peak_points_y, 'rx')
     plt.plot(tl, min_inter, 'k')
     plt.plot(SECONDS[0] + (low_points_x / FS), low_points_y, 'kx')
-    plt.plot(tl, (min_inter + max_inter) / 2, 'm')
+    max_value = max_inter.max()
+    thres = min_inter + max_value / 10
+    plt.plot(tl, thres, 'm')
     plt.gcf().set_size_inches(15, 5)
     plt.gca().set_xlim(*SECONDS)
     if INTERACTIVE:

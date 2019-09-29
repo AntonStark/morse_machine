@@ -3,7 +3,7 @@ import Levenshtein
 import pandas as pd
 
 CSV_DIR = './csv_tables'
-PREDICTIONS = 'Predictions1_1.csv'
+PREDICTIONS = 'Predictions2.csv'
 METRICS = 'Metrics.csv'
 
 
