@@ -11,6 +11,7 @@ PLOTS_DIR = './plots'
 TEST1 = 'cw001.wav'
 
 FS = 8000
+SECONDS = (0, 6)
 
 
 def draw_ampl_dist(ys, name, **kwargs):
@@ -65,9 +66,9 @@ def series_length(ds):
 
 
 def main():
-    ys, wave_file = utils.process.load_raw(utils.audio_filepath(AUDIO_DIR, TEST1), seconds=(0, 6))
+    ys, wave_file = utils.process.load_raw(utils.audio_filepath(AUDIO_DIR, TEST1), seconds=SECONDS)
 
-    utils.plot.draw_time_series(ys, wave_file=wave_file, seconds=(0, 6), interactive=False, save_to='amplitude.png')
+    utils.plot.draw_time_series(ys, wave_file=wave_file, seconds=SECONDS, interactive=False, save_to='amplitude.png')
 
     # draw_ampl_dist(ys, 'dist.png')
     draw_ampl_dist(ys, 'dist.png', bins=100)
@@ -78,7 +79,7 @@ def main():
 
     fys = utils.process.adaptive_bandpass_filter(ys, spectrum, FS)
 
-    utils.plot.draw_time_series(fys, wave_file=wave_file, seconds=(0, 6), interactive=False,
+    utils.plot.draw_time_series(fys, wave_file=wave_file, seconds=SECONDS, interactive=False,
                                 save_to='filtered_amplitude.png')
     draw_ampl_dist(fys, 'dist_filtered.png', bins=100)
 
@@ -94,7 +95,7 @@ def main():
         plt.plot(utils.process.time_labels(wave_file, len(sm)), sm)
         plt.gcf().set_size_inches(15, 5)
         plt.gca().set_ylim(0, 2000)
-        plt.gca().set_xlim(0, 6)
+        plt.gca().set_xlim(*SECONDS)
         plt.savefig(filename, dpi=100)
         plt.close()
 
@@ -126,7 +127,7 @@ def main():
     plt.plot(utils.process.time_labels(wave_file, len(log)), log)
     plt.gcf().set_size_inches(15, 5)
     # plt.gca().set_ylim(0, 2000)
-    plt.gca().set_xlim(0, 6)
+    plt.gca().set_xlim(*SECONDS)
     plt.savefig('log.png', dpi=100)
     plt.close()
 
@@ -139,7 +140,7 @@ def main():
         plt.plot(tl[peaks], sm_not_nan[peaks], 'x')
         plt.gcf().set_size_inches(15, 5)
         plt.gca().set_ylim(0, 2000)
-        plt.gca().set_xlim(0, 6)
+        plt.gca().set_xlim(*SECONDS)
         plt.savefig(f'peaks{distance}ms.png', dpi=100)
         plt.close()
     draw_peaks(160)
@@ -218,12 +219,8 @@ def main():
 
     # dd1 = threshold(sm, 160)
     dd1 = threshold(n1, 0.5)
-    # todo число связных компонент "1" в зависимости от порогового значения
-    #  поскольку импульсы имеют некоторую высоту, график числа компонент от величины
-    #  порогового значения будет иметь "полочку"
-    # todo также можно смотреть на распределнеие длительностей "0" при разных пороговых
     plt.plot(utils.process.time_labels(wave_file, len(dd1)), dd1, fillstyle='none')
-    plt.gca().set_xlim(0, 6)
+    plt.gca().set_xlim(*SECONDS)
     plt.gcf().set_size_inches(15, 5)
     plt.savefig('discrete.png', dpi=100)
     plt.close()
